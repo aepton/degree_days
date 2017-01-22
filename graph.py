@@ -1,13 +1,17 @@
+import boto3
 import numpy
 import pandas as pd
 import requests
 
 from csv import DictReader
 from datetime import datetime, timedelta
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from ggplot import *
 from StringIO import StringIO
 
-def generate_image_for_location(location, num_days):
+def generate_image_for_location(location, num_days, email_string):
     url = 'http://data.rcc-acis.org/StnData'
 
     elems = [
@@ -45,7 +49,6 @@ def generate_image_for_location(location, num_days):
 
     r = requests.post(url, data=payload)
     result = r.json()
-    print result
 
     filtered_begin_date = begin_date + adjust
 
@@ -74,79 +77,6 @@ def generate_image_for_location(location, num_days):
             for row in parsed_results
         ]
     }
-    """
-        'Cooling (LY)': [
-            int(
-                days.get(
-                    row[-1].strftime(time_fmt),
-                    '00000'
-                ).get(
-                    row[-1].year - 1,
-                    '00000'
-                )[4]
-            ) for row in parsed_results
-        ],
-        'Heating (LY)': [
-            int(
-                days.get(
-                    row[-1].strftime(time_fmt),
-                    '00000'
-                ).get(
-                    row[-1].year - 1,
-                    '00000'
-                )[3]
-            ) for row in parsed_results
-        ],
-        'Cooling (10YLo)': [
-            numpy.min(
-                [
-                    int(
-                        days.get(
-                            row[-1].strftime(time_fmt),
-                            '00000'
-                        ).get(year, '00000')[4]
-                    ) for year in range(row[-1].year - 11, row[-1].year - 1)
-                ]
-            ) for row in parsed_results
-        ],
-        'Heating (10YLo)': [
-            numpy.min(
-                [
-                    int(
-                        days.get(
-                            row[-1].strftime(time_fmt),
-                            '00000'
-                        ).get(year, '00000')[3]
-                    ) for year in range(row[-1].year - 11, row[-1].year - 1)
-                ]
-            ) for row in parsed_results
-        ],
-        'Cooling (10YHi)': [
-            numpy.max(
-                [
-                    int(
-                        days.get(
-                            row[-1].strftime(time_fmt),
-                            '00000'
-                        ).get(year, '00000')[4]
-                    ) for year in range(row[-1].year - 11, row[-1].year - 1)
-                ]
-            ) for row in parsed_results
-        ],
-        'Heating (10YHi)': [
-            numpy.max(
-                [
-                    int(
-                        days.get(
-                            row[-1].strftime(time_fmt),
-                            '00000'
-                        ).get(year, '00000')[3]
-                    ) for year in range(row[-1].year - 11, row[-1].year - 1)
-                ]
-            ) for row in parsed_results
-        ]
-    }
-    """
 
     df = pd.DataFrame(chart_data)
 
@@ -159,9 +89,6 @@ def generate_image_for_location(location, num_days):
         ], var_name='DD Type'
     )
 
-    #melted['min'] = []
-    #melted['max'] = []
-
     image = ggplot(
             melted,
             aes(x='date', y='value', color='DD Type')) +\
@@ -171,7 +98,34 @@ def generate_image_for_location(location, num_days):
         ggtitle("Degree Days for %s, Last %d Days" % (
             result['meta']['name'], num_days))
 
-    image.save('/Users/abraham.epton/Downloads/%s_%d_dd.png' % (location, num_days))
+    image_path = '/Users/abraham.epton/Downloads/%s_%d_dd.png' % (location, num_days)
+
+    image.save(image_path)
+
+    session = boto3.Session(profile_name='abe')
+    connection = session.client('ses', 'us-east-1')
+
+    for address in email_string.split(','):
+        print 'Emailing %s' % address
+        message = MIMEMultipart()
+        message['Subject'] = 'Degree Days for %s' % result['meta']['name']
+        message['From'] = 'abraham.epton@gmail.com'
+        message['To'] = address
+
+        part = MIMEText("Attaching Degree Days for %s, Last %d Days" % (
+            result['meta']['name'], num_days))
+        message.attach(part)
+
+        part = MIMEImage(open(image_path, 'rb').read())
+        part.add_header('Content-Disposition', 'attachment', filename=image_path)
+        message.attach(part)
+
+        connection.send_raw_email(
+            RawMessage={
+                'Data': message.as_string()
+            },
+            Source=message['From'],
+            Destinations=[message['To']])
 
 
 if __name__ == '__main__':
@@ -180,6 +134,6 @@ if __name__ == '__main__':
     locations = requests.get(url)
     for row in DictReader(StringIO(locations.text)):
         print 'Generating %s, %s' % (row['Station'], row['Period'])
-        generate_image_for_location(row['Station'], int(row['Period']))
+        generate_image_for_location(row['Station'], int(row['Period']), row['Emails'])
 
 
