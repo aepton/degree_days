@@ -30,7 +30,7 @@ def generate_image_for_location(location, num_days):
     ]
 
     period_length = timedelta(days=num_days)
-    adjust = timedelta(days=15*365)
+    adjust = timedelta(days=0*365)
     one_day = timedelta(days=1)
     end_date = datetime.today() - one_day
     begin_date = end_date - period_length - adjust
@@ -45,6 +45,7 @@ def generate_image_for_location(location, num_days):
 
     r = requests.post(url, data=payload)
     result = r.json()
+    print result
 
     filtered_begin_date = begin_date + adjust
 
@@ -63,10 +64,17 @@ def generate_image_for_location(location, num_days):
 
     chart_data = {
         'date': [row[-1] for row in parsed_results],
-        'mint': [int(row[2]) for row in parsed_results],
-        'maxt': [int(row[1]) for row in parsed_results],
-        'Cooling': [int(row[4]) for row in parsed_results],
-        'Heating': [int(row[3]) for row in parsed_results],
+        'mint': [int(row[2]) if row[2].isdigit() else 0 for row in parsed_results],
+        'maxt': [int(row[1]) if row[1].isdigit() else 0 for row in parsed_results],
+        'Cooling': [int(row[4]) if row[4].isdigit() else 0 for row in parsed_results],
+        'Heating': [int(row[3]) if row[3].isdigit() else 0 for row in parsed_results],
+        'dd': [
+            int(row[3]) if row[3].isdigit() else 0 +\
+            int(row[4]) if row[4].isdigit() else 0 \
+            for row in parsed_results
+        ]
+    }
+    """
         'Cooling (LY)': [
             int(
                 days.get(
@@ -89,32 +97,8 @@ def generate_image_for_location(location, num_days):
                 )[3]
             ) for row in parsed_results
         ],
-        'Cooling (5YA)': [
-            numpy.mean(
-                [
-                    int(
-                        days.get(
-                            row[-1].strftime(time_fmt),
-                            '00000'
-                        ).get(year, '00000')[4]
-                    ) for year in range(row[-1].year - 6, row[-1].year - 1)
-                ]
-            ) for row in parsed_results
-        ],
-        'Heating (5YA)': [
-            numpy.mean(
-                [
-                    int(
-                        days.get(
-                            row[-1].strftime(time_fmt),
-                            '00000'
-                        ).get(year, '00000')[3]
-                    ) for year in range(row[-1].year - 6, row[-1].year - 1)
-                ]
-            ) for row in parsed_results
-        ],
-        'Cooling (10YA)': [
-            numpy.mean(
+        'Cooling (10YLo)': [
+            numpy.min(
                 [
                     int(
                         days.get(
@@ -125,8 +109,8 @@ def generate_image_for_location(location, num_days):
                 ]
             ) for row in parsed_results
         ],
-        'Heating (10YA)': [
-            numpy.mean(
+        'Heating (10YLo)': [
+            numpy.min(
                 [
                     int(
                         days.get(
@@ -137,29 +121,54 @@ def generate_image_for_location(location, num_days):
                 ]
             ) for row in parsed_results
         ],
-        'dd': [int(row[3]) + int(row[4]) for row in parsed_results],
+        'Cooling (10YHi)': [
+            numpy.max(
+                [
+                    int(
+                        days.get(
+                            row[-1].strftime(time_fmt),
+                            '00000'
+                        ).get(year, '00000')[4]
+                    ) for year in range(row[-1].year - 11, row[-1].year - 1)
+                ]
+            ) for row in parsed_results
+        ],
+        'Heating (10YHi)': [
+            numpy.max(
+                [
+                    int(
+                        days.get(
+                            row[-1].strftime(time_fmt),
+                            '00000'
+                        ).get(year, '00000')[3]
+                    ) for year in range(row[-1].year - 11, row[-1].year - 1)
+                ]
+            ) for row in parsed_results
+        ]
     }
+    """
 
     df = pd.DataFrame(chart_data)
 
     filtered_df = df[df['date'] > filtered_begin_date]
 
+    melted = pd.melt(
+        filtered_df, id_vars=['date'], value_vars=[
+            'Cooling',
+            'Heating',
+        ], var_name='DD Type'
+    )
+
+    #melted['min'] = []
+    #melted['max'] = []
+
     image = ggplot(
-            pd.melt(
-                filtered_df, id_vars=['date'], value_vars=[
-                    'Cooling',
-                    'Cooling (LY)',
-                    'Cooling (10YA)',
-                    'Heating',
-                    'Heating (LY)',
-                    'Heating (10YA)'
-                ], var_name='DD Type'
-            ),
+            melted,
             aes(x='date', y='value', color='DD Type')) +\
         geom_line() + scale_x_date(labels = date_format(time_fmt)) +\
         theme_bw() + xlab("Date") + ylab("Degree Days") +\
-        scale_color_manual(values=['darkblue', 'lightblue', 'blue', 'darkred', 'pink', 'red']) +\
-        ggtitle("Degree Days for %s, Last %d Days vs Historic" % (
+        scale_color_manual(values=['blue', 'pink']) +\
+        ggtitle("Degree Days for %s, Last %d Days" % (
             result['meta']['name'], num_days))
 
     image.save('/Users/abraham.epton/Downloads/%s_%d_dd.png' % (location, num_days))
