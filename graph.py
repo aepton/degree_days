@@ -110,8 +110,8 @@ def generate_image_for_location(location, num_days, email_string):
     image.save(image_path)
 
     email_text = {
-        'html': '<h2>Degree Days report for %s</h2>' % (result['meta']['name']),
-        'text': 'Degree Days report for %s\n\n' % (result['meta']['name'])
+        'html': '<h2>Degree Days report for %s - %s</h2>' % (location, result['meta']['name']),
+        'text': 'Degree Days report for %s - %s\n\n' % (location,result['meta']['name'])
     }
 
     ty_days = {'Cooling': 0, 'Heating': 0}
@@ -369,7 +369,7 @@ def generate_image_for_location(location, num_days, email_string):
     for address in email_string.split(','):
         print 'Emailing %s' % address
         message = MIMEMultipart('alternative')
-        message['Subject'] = 'Degree Days for %s' % result['meta']['name']
+        message['Subject'] = 'Degree Days for %s - %s' % (location, result['meta']['name'])
         message['From'] = 'abraham.epton@gmail.com'
         message['To'] = address
 
