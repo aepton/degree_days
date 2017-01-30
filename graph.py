@@ -3,6 +3,7 @@ import locale
 import numpy
 import pandas as pd
 import requests
+import spectra
 
 from csv import DictReader
 from datetime import datetime, timedelta
@@ -37,7 +38,7 @@ def generate_image_for_location(location, num_days, email_string):
     ]
 
     period_length = timedelta(days=num_days)
-    adjust = timedelta(days=6*365)
+    adjust = timedelta(days=11*365)
     one_day = timedelta(days=1)
     one_year = timedelta(days=1*365)
     end_date = datetime.today() - one_day
@@ -113,57 +114,176 @@ def generate_image_for_location(location, num_days, email_string):
         'text': 'Degree Days report for %s\n\n' % (result['meta']['name'])
     }
 
-    days = {'Cooling': 0, 'Heating': 0}
+    ty_days = {'Cooling': 0, 'Heating': 0}
     dt = end_date + one_day - timedelta(days=num_days)
     while dt <= end_date:
         data = df[df['date']==dt.strftime(row_time_fmt)]
-        for key in days.keys():
-            days[key] += data[key].values[0]
+        for key in ty_days.keys():
+            ty_days[key] += data[key].values[0]
         dt += one_day
     email_text['text'] += 'Last 30 days: %s HDD, %s CDD\n' % (
-        locale.format('%d', days['Heating'], grouping=True),
-        locale.format('%d', days['Cooling'], grouping=True)
+        locale.format('%d', ty_days['Heating'], grouping=True),
+        locale.format('%d', ty_days['Cooling'], grouping=True)
     )
     email_text['html'] += '<p>Last 30 days: <strong>%s</strong> HDD, <strong>%s</strong> CDD<br>' % (
-        locale.format('%d', days['Heating'], grouping=True),
-        locale.format('%d', days['Cooling'], grouping=True))
+        locale.format('%d', ty_days['Heating'], grouping=True),
+        locale.format('%d', ty_days['Cooling'], grouping=True))
 
-    days = {'Cooling': 0, 'Heating': 0}
+    light_green = '#a1d99b'
+    dark_green = '#00441b'
+    light_red = '#fc9272'
+    dark_red = '#67000d'
+    green_scale = spectra.scale([light_green, dark_green])
+    red_scale = spectra.scale([light_red, dark_red])
+
+    ly_days = {'Cooling': 0, 'Heating': 0}
     dt = end_date + one_day - one_year - timedelta(days=num_days)
     while dt <= (end_date - one_year):
         data = df[df['date']==dt.strftime(row_time_fmt)]
-        for key in days.keys():
-            days[key] += data[key].values[0]
+        for key in ly_days.keys():
+            ly_days[key] += data[key].values[0]
         dt += one_day
-    email_text['text'] += 'Same time period last year: %s HDD, %s CDD\n' % (
-        locale.format('%d', days['Heating'], grouping=True),
-        locale.format('%d', days['Cooling'], grouping=True)
+    hdd_change_sign = '+'
+    hdd_change_pct = 0.
+    if ly_days['Heating']:
+        hdd_change_pct = 100. * (
+            (float(ty_days['Heating']) - float(ly_days['Heating']))/ly_days['Heating'])
+    try:
+        hdd_change_color = green_scale(abs(hdd_change_pct/100.)).hexcode
+    except:
+        hdd_change_color = dark_green
+    cdd_change_sign = '-'
+    cdd_change_pct = 0.
+    if ly_days['Cooling']:
+        cdd_change_pct = 100. * (
+            (float(ty_days['Cooling']) - float(ly_days['Cooling']))/ly_days['Cooling'])
+    try:
+        cdd_change_color = green_scale(abs(cdd_change_pct/100.)).hexcode
+    except:
+        cdd_change_color = dark_green
+    if ty_days['Heating'] < ly_days['Heating']:
+        try:
+            hdd_change_color = red_scale(abs(hdd_change_pct/100.)).hexcode
+        except:
+            hdd_change_color = dark_red
+        hdd_change_sign = ''
+    elif ty_days['Heating'] == ly_days['Heating']:
+        hdd_change_color = 'black'
+        hdd_change_sign = ''
+    if ty_days['Cooling'] < ly_days['Cooling']:
+        try:
+            cdd_change_color = red_scale(abs(cdd_change_pct/100.)).hexcode
+        except:
+            cdd_change_color = dark_red
+        cdd_change_sign = ''
+    elif ty_days['Cooling'] == ly_days['Cooling']:
+        cdd_change_color = 'black'
+        cdd_change_sign = ''
+    email_text['text'] += 'Same time period last year: %s HDD (%s%.2f%%), %s CDD (%s%.2f%%)\n' % (
+        locale.format('%d', ly_days['Heating'], grouping=True),
+        hdd_change_sign,
+        hdd_change_pct,
+        locale.format('%d', ly_days['Cooling'], grouping=True),
+        cdd_change_sign,
+        cdd_change_pct
     )
-    email_text['html'] += 'Same time period last year: <strong>%s</strong> HDD, <strong>%s</strong> CDD<br>' % (
-        locale.format('%d', days['Heating'], grouping=True),
-        locale.format('%d', days['Cooling'], grouping=True)
+    email_text['html'] += 'Same time period last year: <strong style="color:%s">%s (%s%.2f%%) HDD</strong>, <strong style="color:%s">%s (%s%.2f%%) CDD</strong><br>' % (
+        hdd_change_color,
+        locale.format('%d', ly_days['Heating'], grouping=True),
+        hdd_change_sign,
+        hdd_change_pct,
+        cdd_change_color,
+        locale.format('%d', ly_days['Cooling'], grouping=True),
+        cdd_change_sign,
+        cdd_change_pct
     )
 
-    days = {'Cooling': 0, 'Heating': 0}
-
-    year_adjust = 5
+    avg_days = {'Cooling': 0, 'Heating': 0}
+    year_adjust = 10
     divisor = float(year_adjust)
     while year_adjust:
         begin_date = end_date + one_day - timedelta(days=year_adjust*365) - timedelta(days=num_days)
         dt = end_date + one_day - timedelta(days=year_adjust*365) - timedelta(days=num_days)
         while dt <= (end_date - timedelta(days=year_adjust*365)):
             data = df[df['date']==dt.strftime(row_time_fmt)]
-            for key in days.keys():
-                days[key] += data[key].values[0]
+            for key in avg_days.keys():
+                avg_days[key] += data[key].values[0]
             dt += one_day
         year_adjust -= 1
-    email_text['text'] += 'Same time period last five years (avg): %s HDD, %s CDD\n' % (
-        locale.format('%.1f', float(days['Heating'])/float(divisor), grouping=True),
-        locale.format('%.1f', float(days['Cooling'])/float(divisor), grouping=True)
+
+    hdd_change_sign = '+'
+    hdd_change_value = float(avg_days['Heating'])/float(divisor)
+    hdd_change_pct = 0.
+    if hdd_change_value:
+        hdd_change_pct = 100. * ((float(ty_days['Heating']) - hdd_change_value)/hdd_change_value)
+    try:
+        hdd_change_color = green_scale(abs(hdd_change_pct/100.)).hexcode
+    except:
+        hdd_change_color = dark_green
+    cdd_change_sign = '-'
+    cdd_change_value = float(avg_days['Cooling'])/float(divisor)
+    cdd_change_pct = 0.
+    if cdd_change_value:
+        cdd_change_pct = 100. * ((float(ty_days['Cooling']) - cdd_change_value)/cdd_change_value)
+    try:
+        cdd_change_color = green_scale(abs(cdd_change_pct/100.)).hexcode
+    except:
+        cdd_change_color = dark_green
+    if ty_days['Heating'] < hdd_change_value:
+        try:
+            hdd_change_color = red_scale(abs(hdd_change_pct/100.)).hexcode
+        except:
+            hdd_change_color = dark_red
+        hdd_change_sign = ''
+    elif ty_days['Heating'] == hdd_change_value:
+        hdd_change_color = 'black'
+        hdd_change_sign = ''
+    if ty_days['Cooling'] < cdd_change_value:
+        try:
+            cdd_change_color = red_scale(abs(cdd_change_pct/100.)).hexcode
+        except:
+            cdd_change_color = dark_red
+        cdd_change_sign = ''
+    elif ty_days['Cooling'] == cdd_change_value:
+        cdd_change_color = 'black'
+        cdd_change_sign = ''
+    email_text['text'] += 'Same time period last ten years (avg): %s HDD (%s%.2f%%), %s CDD (%s%.2f%%)\n' % (
+        locale.format('%.1f', hdd_change_value, grouping=True),
+        hdd_change_sign,
+        hdd_change_pct,
+        locale.format('%.1f', cdd_change_value, grouping=True),
+        cdd_change_sign,
+        cdd_change_pct
     )
-    email_text['html'] += 'Same time period last five years (avg): <strong>%s</strong> HDD, <strong>%s</strong> CDD</p>' % (
-        locale.format('%.1f', float(days['Heating'])/float(divisor), grouping=True),
-        locale.format('%.1f', float(days['Cooling'])/float(divisor), grouping=True)
+    email_text['text'] += 'Deviation from last ten years (avg): %s HDD, %s CDD\n' % (
+        locale.format(
+            '%.1f',
+            ty_days['Heating'] - hdd_change_value,
+            grouping=True),
+        locale.format(
+            '%.1f',
+            ty_days['Cooling'] - cdd_change_value,
+            grouping=True)
+    )
+    email_text['html'] += 'Same time period last ten years (avg): <strong style="color:%s">%s (%s%.2f%%) HDD</strong>, <strong style="color:%s">%s (%s%.2f%%) CDD</strong></p>' % (
+        hdd_change_color,
+        locale.format('%.1f', hdd_change_value, grouping=True),
+        hdd_change_sign,
+        hdd_change_pct,
+        cdd_change_color,
+        locale.format('%.1f', cdd_change_value, grouping=True),
+        cdd_change_sign,
+        cdd_change_pct
+    )
+    email_text['html'] += 'Deviation from last ten years (avg): <strong>%s</strong> HDD, <strong>%s</strong> CDD</p>' % (
+        locale.format(
+            '%.1f',
+            ty_days['Heating'] - hdd_change_value,
+            grouping=True),
+        locale.format(
+            '%.1f',
+            ty_days['Cooling'] - cdd_change_value,
+            grouping=True)
     )
 
     r = requests.get('http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt')
@@ -182,18 +302,66 @@ def generate_image_for_location(location, num_days, email_string):
             forecast = int(results[1].replace(',', ''))
             deviation_normal = int(results[2].replace(',', ''))
             deviation_last_year = int(results[3].replace(',', ''))
-            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s\nDeviation from last year: %s\n' % (
+            deviation_normal_sign = '+'
+            deviation_normal_pct = 0.
+            deviation_normal_value = float(forecast + -1 * deviation_normal)
+            if deviation_normal_value != 0.:
+                deviation_normal_pct = (
+                    100. * (float(forecast) - deviation_normal_value)/deviation_normal_value)
+            try:
+                deviation_normal_color = green_scale(abs(deviation_normal_pct/100.)).hexcode
+            except:
+                deviation_normal_color = dark_green
+            deviation_ly_sign = '+'
+            deviation_ly_pct = 0.
+            deviation_ly_value = float(forecast + -1 * deviation_last_year)
+            if deviation_ly_value != 0.:
+                deviation_ly_pct = (
+                    100. * (float(forecast) - deviation_ly_value)/deviation_ly_value)
+            try:
+                deviation_ly_color = green_scale(abs(deviation_ly_pct/100.)).hexcode
+            except:
+                deviation_ly_color = dark_green
+            if deviation_normal < 0:
+                deviation_normal_sign = ''
+                try:
+                    deviation_normal_color = red_scale(abs(deviation_normal_pct/100.)).hexcode
+                except:
+                    deviation_normal_color = dark_red
+            elif deviation_normal == 0:
+                deviation_normal_sign = ''
+                deviation_normal_color = 'black'
+            if deviation_last_year < 0:
+                deviation_ly_sign = ''
+                try:
+                    deviation_ly_color = red_scale(abs(deviation_ly_pct/100.)).hexcode
+                except:
+                    deviation_ly_color = dark_red
+            elif deviation_last_year == 0:
+                deviation_ly_sign = ''
+                deviation_ly_color = 'black'
+            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)\n' % (
                 locale.format('%d', forecast, grouping=True),
                 locale.format('%d', deviation_normal, grouping=True),
-                locale.format('%d', deviation_last_year, grouping=True)
+                deviation_normal_sign,
+                deviation_normal_pct,
+                locale.format('%d', deviation_last_year, grouping=True),
+                deviation_ly_sign,
+                deviation_ly_pct
             )
-            email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days next week<br>Deviation from normal: <strong>%s</strong> degree days<br>Deviation from last year: <strong>%s</strong> degree days</p>' % (
+            email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days next week<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
                 locale.format('%d', forecast, grouping=True),
+                deviation_normal_color,
                 locale.format('%d', deviation_normal, grouping=True),
-                locale.format('%d', deviation_last_year, grouping=True)
+                deviation_normal_sign,
+                deviation_normal_pct,
+                deviation_ly_color,
+                locale.format('%d', deviation_last_year, grouping=True),
+                deviation_ly_sign,
+                deviation_ly_pct
             )
-        except:
-            pass
+        except Exception, e:
+            print e
 
     session = boto3.Session(profile_name='abe')
     connection = session.client('ses', 'us-east-1')
