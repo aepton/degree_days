@@ -16,6 +16,7 @@ from StringIO import StringIO
 locale.setlocale(locale.LC_ALL, '')
 
 def generate_image_for_location(location, num_days, email_string):
+    # Set up request to RCC-ACIS system
     url = 'http://data.rcc-acis.org/StnData'
 
     elems = [
@@ -37,8 +38,11 @@ def generate_image_for_location(location, num_days, email_string):
         }
     ]
 
+    # Pick the time periods we're interested in
     period_length = timedelta(days=num_days)
-    adjust = timedelta(days=11*365)
+    num_years_for_avg = 10
+    num_years = num_years_for_avg + 1 # Make sure we're getting enough data for X-year averages
+    adjust = timedelta(days=num_years*365)
     one_day = timedelta(days=1)
     one_year = timedelta(days=1*365)
     end_date = datetime.today() - one_day
@@ -57,8 +61,10 @@ def generate_image_for_location(location, num_days, email_string):
     r = requests.post(url, data=payload)
     result = r.json()
 
+    # Reset the begin_date to the window we actually care about (i.e. offset the adjustment)
     filtered_begin_date = begin_date + adjust
 
+    # Create dict keyed on day-of-year with all years' results for that day in another dict
     days = {}
     for row in result['data']:
         row_date = datetime.strptime(row[0], row_time_fmt)
@@ -67,11 +73,13 @@ def generate_image_for_location(location, num_days, email_string):
             days[key] = {}
         days[key][row_date.year] = row
 
+    # Add a formatted date entry as the last element in each row
     parsed_results = []
     for row in result['data']:
         row.append(datetime.strptime(row[0], row_time_fmt))
         parsed_results.append(row)
 
+    # Create data we can use directly for charts
     chart_data = {
         'date': [row[-1] for row in parsed_results],
         'mint': [int(row[2]) if row[2].isdigit() else 0 for row in parsed_results],
@@ -85,35 +93,24 @@ def generate_image_for_location(location, num_days, email_string):
         ]
     }
 
-    df = pd.DataFrame(chart_data)
-
-    filtered_df = df[df['date'] > filtered_begin_date]
-
-    melted = pd.melt(
-        filtered_df, id_vars=['date'], value_vars=[
-            'Cooling',
-            'Heating',
-        ], var_name='DD Type'
-    )
-
-    image = ggplot(
-            melted,
-            aes(x='date', y='value', color='DD Type')) +\
-        geom_line() + scale_x_date(labels = date_format(chart_time_fmt)) +\
-        theme_bw() + xlab("Date") + ylab("Degree Days") +\
-        scale_color_manual(values=['blue', 'pink']) +\
-        ggtitle("Degree Days for %s, Last %d Days" % (
-            result['meta']['name'], num_days))
-
-    image_path = '/tmp/%s_%d_dd.png' % (location, num_days)
-
-    image.save(image_path)
-
+    # Begin setting up email text
     email_text = {
         'html': '<h2>Degree Days report for %s - %s</h2>' % (location, result['meta']['name']),
         'text': 'Degree Days report for %s - %s\n\n' % (location,result['meta']['name'])
     }
 
+    # Set up the color scales we'll use for increasing/decreasing values in text
+    light_green = '#a1d99b'
+    dark_green = '#00441b'
+    light_red = '#fc9272'
+    dark_red = '#67000d'
+    green_scale = spectra.scale([light_green, dark_green])
+    red_scale = spectra.scale([light_red, dark_red])
+
+    # Create a dataframe based on the chart
+    df = pd.DataFrame(chart_data)
+
+    # Compute, and generate text for, last X days this year
     ty_days = {'Cooling': 0, 'Heating': 0}
     dt = end_date + one_day - timedelta(days=num_days)
     while dt <= end_date:
@@ -129,13 +126,7 @@ def generate_image_for_location(location, num_days, email_string):
         locale.format('%d', ty_days['Heating'], grouping=True),
         locale.format('%d', ty_days['Cooling'], grouping=True))
 
-    light_green = '#a1d99b'
-    dark_green = '#00441b'
-    light_red = '#fc9272'
-    dark_red = '#67000d'
-    green_scale = spectra.scale([light_green, dark_green])
-    red_scale = spectra.scale([light_red, dark_red])
-
+    # Compute, and generate text for, same time period last year
     ly_days = {'Cooling': 0, 'Heating': 0}
     dt = end_date + one_day - one_year - timedelta(days=num_days)
     while dt <= (end_date - one_year):
@@ -198,18 +189,18 @@ def generate_image_for_location(location, num_days, email_string):
         cdd_change_pct
     )
 
+    # Compute, and generate text for, average HDD/CDD days for this time period over last X years
     avg_days = {'Cooling': 0, 'Heating': 0}
-    year_adjust = 10
-    divisor = float(year_adjust)
-    while year_adjust:
-        begin_date = end_date + one_day - timedelta(days=year_adjust*365) - timedelta(days=num_days)
-        dt = end_date + one_day - timedelta(days=year_adjust*365) - timedelta(days=num_days)
-        while dt <= (end_date - timedelta(days=year_adjust*365)):
+    divisor = float(num_years_for_avg)
+    while num_years_for_avg:
+        begin_date = end_date + one_day - timedelta(days=num_years_for_avg*365) - timedelta(days=num_days)
+        dt = end_date + one_day - timedelta(days=num_years_for_avg*365) - timedelta(days=num_days)
+        while dt <= (end_date - timedelta(days=num_years_for_avg*365)):
             data = df[df['date']==dt.strftime(row_time_fmt)]
             for key in avg_days.keys():
                 avg_days[key] += data[key].values[0]
             dt += one_day
-        year_adjust -= 1
+        num_years_for_avg -= 1
 
     hdd_change_sign = '+'
     hdd_change_value = float(avg_days['Heating'])/float(divisor)
@@ -286,6 +277,7 @@ def generate_image_for_location(location, num_days, email_string):
             grouping=True)
     )
 
+    # Now let's get the forecast from NOAA for the next week
     r = requests.get('http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt')
     forecast_date_sign = 'LAST DATE OF FORECAST WEEK IS '
     for line in r.text.splitlines():
@@ -363,6 +355,57 @@ def generate_image_for_location(location, num_days, email_string):
         except Exception, e:
             print e
 
+    # Generate day-by-day last-x-years average values for charts
+    filtered_df = df.loc[(df['date'] >= filtered_begin_date) & (df['date'] <= end_date), :]
+    averages = {}
+    avg_years = {
+        'ORD': 10,
+        'ILX': 5,
+        'LOT': 10,
+        'PWK': 3,
+        'DPA': 10
+    }
+    num_years_for_avg = avg_years[location]
+    for d in filtered_df['date']:
+        formatted_date = d.strftime(chart_time_fmt)
+        averages[formatted_date] = {'Cooling': 0., 'Heating': 0.}
+        numerator = {'Heating': 0., 'Cooling': 0.}
+        for year in sorted(days[formatted_date], reverse=True)[:num_years_for_avg]:
+            numerator['Heating'] += float(days[formatted_date][year][3])
+            numerator['Cooling'] += float(days[formatted_date][year][4])
+        averages[formatted_date]['Heating'] = numerator['Heating']/float(num_years_for_avg)
+        averages[formatted_date]['Cooling'] = numerator['Cooling']/float(num_years_for_avg)
+
+    filtered_df.loc[:, 'Cooling (%dya)' % avg_years[location]] = [
+        averages[k.strftime(chart_time_fmt)]['Cooling'] for k in filtered_df['date']]
+    filtered_df.loc[:, 'Heating (%dya)' % avg_years[location]] = [
+        averages[k.strftime(chart_time_fmt)]['Heating'] for k in filtered_df['date']]
+
+    # Turn multi-column table into essentially list of key-value pairs for chart creation
+    melted = pd.melt(
+        filtered_df, id_vars=['date'], value_vars=[
+            'Cooling',
+            'Heating',
+            'Cooling (%sya)' % avg_years[location],
+            'Heating (%sya)' % avg_years[location]
+        ], var_name='DD Type'
+    )
+
+    # Generate the image
+    image = ggplot(
+            melted,
+            aes(x='date', y='value', color='DD Type')) +\
+        geom_line() + scale_x_date(labels = date_format(chart_time_fmt)) +\
+        theme_bw() + xlab("Date") + ylab("Degree Days") +\
+        scale_color_manual(values=['blue', 'pink', 'lightblue', 'purple']) +\
+        ggtitle("Degree Days for %s, Last %d Days" % (
+            result['meta']['name'], num_days))
+
+    image_path = '/tmp/%s_%d_dd.png' % (location, num_days)
+
+    image.save(image_path)
+
+    # Create and send the email
     session = boto3.Session(profile_name='abe')
     connection = session.client('ses', 'us-east-1')
 
