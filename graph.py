@@ -360,9 +360,9 @@ def generate_image_for_location(location, num_days, email_string):
     averages = {}
     avg_years = {
         'ORD': 10,
-        'ILX': 5,
+        'ILX': 10,
         'LOT': 10,
-        'PWK': 3,
+        'PWK': 10,
         'DPA': 10
     }
     num_years_for_avg = avg_years[location]
@@ -371,8 +371,8 @@ def generate_image_for_location(location, num_days, email_string):
         averages[formatted_date] = {'Cooling': 0., 'Heating': 0.}
         numerator = {'Heating': 0., 'Cooling': 0.}
         for year in sorted(days[formatted_date], reverse=True)[:num_years_for_avg]:
-            numerator['Heating'] += float(days[formatted_date][year][3])
-            numerator['Cooling'] += float(days[formatted_date][year][4])
+            numerator['Heating'] += float(days[formatted_date][year][3]) if days[formatted_date][year][3].isdigit() else 0
+            numerator['Cooling'] += float(days[formatted_date][year][4]) if days[formatted_date][year][4].isdigit() else 0
         averages[formatted_date]['Heating'] = numerator['Heating']/float(num_years_for_avg)
         averages[formatted_date]['Cooling'] = numerator['Cooling']/float(num_years_for_avg)
 
@@ -397,7 +397,7 @@ def generate_image_for_location(location, num_days, email_string):
             aes(x='date', y='value', color='DD Type')) +\
         geom_line() + scale_x_date(labels = date_format(chart_time_fmt)) +\
         theme_bw() + xlab("Date") + ylab("Degree Days") +\
-        scale_color_manual(values=['blue', 'pink', 'lightblue', 'purple']) +\
+        scale_color_manual(values=['lightblue', 'blue', 'purple', 'pink']) +\
         ggtitle("Degree Days for %s, Last %d Days" % (
             result['meta']['name'], num_days))
 
