@@ -348,7 +348,7 @@ def generate_image_for_location(location, num_days, email_string):
                         avg_days[key] += data[key].values[0]
                     dt += one_day
                 num_years_for_avg -= 1
-            combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/10.
+            combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/divisor
             deviation_avg = forecast - combined_avg
             deviation_avg_pct = (float(forecast) - combined_avg)/combined_avg * 100.
             deviation_avg_sign = '+'
