@@ -119,11 +119,13 @@ def generate_image_for_location(location, num_days, email_string):
         for key in ty_days.keys():
             ty_days[key] += data[key].values[0]
         dt += one_day
-    email_text['text'] += 'Last 30 days: %s HDD, %s CDD\n' % (
+    email_text['text'] += 'Last %d days: %s HDD, %s CDD\n' % (
+        num_days,
         locale.format('%d', ty_days['Heating'], grouping=True),
         locale.format('%d', ty_days['Cooling'], grouping=True)
     )
-    email_text['html'] += '<p>Last 30 days: <strong>%s</strong> HDD, <strong>%s</strong> CDD<br>' % (
+    email_text['html'] += '<p>Last %d days: <strong>%s</strong> HDD, <strong>%s</strong> CDD<br>' % (
+        num_days,
         locale.format('%d', ty_days['Heating'], grouping=True),
         locale.format('%d', ty_days['Cooling'], grouping=True))
 
