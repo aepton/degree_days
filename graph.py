@@ -401,7 +401,7 @@ def generate_image_for_location(location, num_days, email_string):
             aes(x='date', y='value', color='DD Type')) +\
         geom_line() + scale_x_date(labels = date_format(chart_time_fmt)) +\
         theme_bw() + xlab("Date") + ylab("Degree Days") +\
-        scale_color_manual(values=['lightblue', 'blue', 'purple', 'pink']) +\
+        scale_color_manual(values=['blue', 'lightblue', 'purple', 'pink']) +\
         ggtitle("Degree Days for %s, Last %d Days" % (
             result['meta']['name'], num_days))
 
