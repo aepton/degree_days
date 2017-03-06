@@ -350,7 +350,7 @@ def generate_image_for_location(location, num_days, email_string):
                 num_years_for_avg -= 1
             combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/10.
             deviation_avg = forecast - combined_avg
-            deviation_avg_pct = (float(forecast) - combined_avg)/combined_avg
+            deviation_avg_pct = (float(forecast) - combined_avg)/combined_avg * 100.
 
             if deviation_avg > forecast:
                 deviation_avg_color = green_scale(abs(deviation_avg_pct/100.)).hexcode
@@ -372,7 +372,7 @@ def generate_image_for_location(location, num_days, email_string):
             )
             email_text['html'] += '<p>Forecast: <strong>%s (%s)</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last 10 years (avg): <strong style="color:%s">%s (%.2f%%)</strong> degree days</p>' % (
                 locale.format('%d', forecast, grouping=True),
-                locale.format('%d', combined_avg, grouping=True),
+                locale.format('%f', combined_avg, grouping=True),
                 deviation_normal_color,
                 locale.format('%d', deviation_normal, grouping=True),
                 deviation_normal_sign,
