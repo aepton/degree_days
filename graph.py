@@ -146,7 +146,7 @@ def generate_image_for_location(location, num_days, email_string):
         hdd_change_color = green_scale(abs(hdd_change_pct/100.)).hexcode
     except:
         hdd_change_color = dark_green
-    cdd_change_sign = '-'
+    cdd_change_sign = '+'
     cdd_change_pct = 0.
     if ly_days['Cooling']:
         cdd_change_pct = 100. * (
