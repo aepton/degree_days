@@ -284,9 +284,9 @@ def generate_image_for_location(location, num_days, email_string):
         if line.strip().startswith('ILLINOIS'):
             results = line.split()
         elif line.strip().startswith(forecast_date_sign):
-            email_text['text'] += 'Degree Day forecast (statewide), following week as of %s\nCourtesy NOAA Climate Prediction Center: http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt' % line.replace(
+            email_text['text'] += 'Degree Day forecast (statewide), week ending %s\nCourtesy NOAA Climate Prediction Center: http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt' % line.replace(
                 forecast_date_sign, '').strip()
-            email_text['html'] += '<h4>Degree Day forecast (statewide), following week as of %s</h4><p>Courtesy <a href="http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt">NOAA Climate Prediction Center</a></p>' % (
+            email_text['html'] += '<h4>Degree Day forecast (statewide), week ending %s</h4><p>Courtesy <a href="http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt">NOAA Climate Prediction Center</a></p>' % (
                 line.replace(forecast_date_sign, '').strip())
 
     if results and len(results) > 4:
