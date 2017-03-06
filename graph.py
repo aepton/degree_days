@@ -110,13 +110,6 @@ def generate_image_for_location(location, num_days, email_string):
     # Create a dataframe based on the chart
     df = pd.DataFrame(chart_data)
 
-    generate_last_days()
-    generate_last_year_comparison()
-    generate_average_days()
-    get_forecast()
-    generate_chart_data()
-    generate_and_send_email()
-
     def generate_last_days():
         # Compute, and generate text for, last X days this year
         ty_days = {'Cooling': 0, 'Heating': 0}
@@ -445,6 +438,13 @@ def generate_image_for_location(location, num_days, email_string):
                 },
                 Source=message['From'],
                 Destinations=[message['To']])
+
+    generate_last_days()
+    generate_last_year_comparison()
+    generate_average_days()
+    get_forecast()
+    generate_chart_data()
+    generate_and_send_email()
 
 
 if __name__ == '__main__':
