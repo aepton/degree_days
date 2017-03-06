@@ -346,6 +346,7 @@ def generate_image_for_location(location, num_days, email_string):
                     data = df[df['date']==dt.strftime(row_time_fmt)]
                     for key in avg_days.keys():
                         avg_days[key] += data[key].values[0]
+                    print dt.strftime(row_time_fmt)
                     dt += one_day
                 num_years_for_avg -= 1
             combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/10.
