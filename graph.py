@@ -343,9 +343,8 @@ def generate_image_for_location(location, num_days, email_string):
                 deviation_ly_sign,
                 deviation_ly_pct
             )
-            email_text['html'] += '<p>Forecast: <strong>%s (%s)</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
+            email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
                 locale.format('%d', forecast, grouping=True),
-                locale.format('%f', combined_avg, grouping=True),
                 deviation_normal_color,
                 locale.format('%d', deviation_normal, grouping=True),
                 deviation_normal_sign,
