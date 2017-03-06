@@ -44,6 +44,7 @@ def generate_image_for_location(location, num_days, email_string):
     num_years = num_years_for_avg + 1 # Make sure we're getting enough data for X-year averages
     adjust = timedelta(days=num_years*365)
     one_day = timedelta(days=1)
+    one_week = timedelta(days=7)
     one_year = timedelta(days=1*365)
     end_date = datetime.today() - one_day
     begin_date = end_date - period_length - adjust
@@ -280,14 +281,14 @@ def generate_image_for_location(location, num_days, email_string):
     # Now let's get the forecast from NOAA for the next week
     r = requests.get('http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt')
     forecast_date_sign = 'LAST DATE OF FORECAST WEEK IS '
+    forecast_date_text = ''
     for line in r.text.splitlines():
         if line.strip().startswith('ILLINOIS'):
             results = line.split()
         elif line.strip().startswith(forecast_date_sign):
-            email_text['text'] += 'Degree Day forecast (statewide), week ending %s\nCourtesy NOAA Climate Prediction Center: http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt' % line.replace(
-                forecast_date_sign, '').strip()
-            email_text['html'] += '<h4>Degree Day forecast (statewide), week ending %s</h4><p>Courtesy <a href="http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt">NOAA Climate Prediction Center</a></p>' % (
-                line.replace(forecast_date_sign, '').strip())
+            forecast_date_text = line.replace(forecast_date_sign, '').strip()
+            email_text['text'] += 'Degree Day forecast (statewide), week ending %s\nCourtesy NOAA Climate Prediction Center: http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt' % forecast_date_text
+            email_text['html'] += '<h4>Degree Day forecast (statewide), week ending %s</h4><p>Courtesy <a href="http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt">NOAA Climate Prediction Center</a></p>' % forecast_date_text
 
     if results and len(results) > 4:
         try:
@@ -332,16 +333,43 @@ def generate_image_for_location(location, num_days, email_string):
             elif deviation_last_year == 0:
                 deviation_ly_sign = ''
                 deviation_ly_color = 'black'
-            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)\n' % (
+
+            # Parse out last date of forecast week
+            forecast_date = datetime.strptime(forecast_date_text, '%b %d, %Y')
+
+            avg_days = {'Cooling': 0, 'Heating': 0}
+            num_years_for_avg = 10
+            divisor = float(num_years_for_avg)
+            while num_years_for_avg:
+                dt = forecast_date + one_day - one_week - timedelta(days=num_years_for_avg*365)
+                while dt <= (forecast_date - timedelta(days=num_years_for_avg*365)):
+                    data = df[df['date']==dt.strftime(row_time_fmt)]
+                    for key in avg_days.keys():
+                        avg_days[key] += data[key].values[0]
+                    dt += one_day
+                num_years_for_avg -= 1
+            deviation_avg = float(avg_days['Cooling'] + avg_days['Heating'])/10.
+            deviation_avg_pct = (float(forecast) - deviation_avg)/deviation_avg
+
+            if deviation_avg > forecast:
+                deviation_avg_color = green_scale(abs(deviation_avg_pct/100.)).hexcode
+            elif deviation_avg < forecast:
+                deviation_avg_color = red_scale(abs(deviation_avg_pct/100.)).hexcode
+            else:
+                deviation_avg_color = 'black'
+
+            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)\nDeviation from last 10 years (avg): %s (%.2f%%)' % (
                 locale.format('%d', forecast, grouping=True),
                 locale.format('%d', deviation_normal, grouping=True),
                 deviation_normal_sign,
                 deviation_normal_pct,
                 locale.format('%d', deviation_last_year, grouping=True),
                 deviation_ly_sign,
-                deviation_ly_pct
+                deviation_ly_pct,
+                locale.format('%d', deviation_avg, grouping=True),
+                deviation_avg_pct
             )
-            email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days next week<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
+            email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last 10 years (avg): <strong style="color:%s">%s (%.2f%%)</strong> degree days</p>' % (
                 locale.format('%d', forecast, grouping=True),
                 deviation_normal_color,
                 locale.format('%d', deviation_normal, grouping=True),
@@ -350,7 +378,10 @@ def generate_image_for_location(location, num_days, email_string):
                 deviation_ly_color,
                 locale.format('%d', deviation_last_year, grouping=True),
                 deviation_ly_sign,
-                deviation_ly_pct
+                deviation_ly_pct,
+                deviation_avg_color,
+                locale.format('%d', deviation_avg, grouping=True),
+                deviation_avg_pct
             )
         except Exception, e:
             print e
