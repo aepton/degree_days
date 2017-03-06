@@ -350,7 +350,7 @@ def generate_image_for_location(location, num_days, email_string):
                 num_years_for_avg -= 1
             combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/divisor
             deviation_avg = forecast - combined_avg
-            deviation_avg_pct = float(deviation_avg)/combined_avg * 100.
+            deviation_avg_pct = float(-1 * deviation_avg)/combined_avg * 100.
             deviation_avg_sign = '+'
 
             if combined_avg > forecast:
