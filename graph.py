@@ -341,10 +341,11 @@ def generate_image_for_location(location, num_days, email_string):
             num_years_for_avg = 1
             divisor = float(num_years_for_avg)
             while num_years_for_avg:
-                dt = forecast_date - one_week - timedelta(days=num_years_for_avg*365)
-                while dt < (forecast_date - timedelta(days=num_years_for_avg*365)):
+                dt = forecast_date + one_day - one_week - timedelta(days=num_years_for_avg*365)
+                while dt <= (forecast_date - timedelta(days=num_years_for_avg*365)):
                     data = df[df['date']==dt.strftime(row_time_fmt)]
                     for key in avg_days.keys():
+                        print data[key].values[0]
                         avg_days[key] += data[key].values[0]
                     print dt.strftime(row_time_fmt)
                     dt += one_day
