@@ -338,7 +338,7 @@ def generate_image_for_location(location, num_days, email_string):
             forecast_date = datetime.strptime(forecast_date_text, '%b %d, %Y')
 
             avg_days = {'Cooling': 0, 'Heating': 0}
-            num_years_for_avg = 5
+            num_years_for_avg = 1
             divisor = float(num_years_for_avg)
             while num_years_for_avg:
                 dt = forecast_date + one_day - one_week - timedelta(days=num_years_for_avg*365)
@@ -356,7 +356,7 @@ def generate_image_for_location(location, num_days, email_string):
             if combined_avg > forecast:
                 deviation_avg_sign = ''
                 deviation_avg_color = green_scale(abs(deviation_avg_pct/100.)).hexcode
-            elif deviation_avg < forecast:
+            elif combined_avg < forecast:
                 deviation_avg_color = red_scale(abs(deviation_avg_pct/100.)).hexcode
             else:
                 deviation_avg_sign = ''
