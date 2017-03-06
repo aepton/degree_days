@@ -341,8 +341,8 @@ def generate_image_for_location(location, num_days, email_string):
             num_years_for_avg = 1
             divisor = float(num_years_for_avg)
             while num_years_for_avg:
-                dt = forecast_date + one_day - one_week - timedelta(days=num_years_for_avg*365)
-                while dt <= (forecast_date - timedelta(days=num_years_for_avg*365)):
+                dt = forecast_date - one_week - timedelta(days=num_years_for_avg*365)
+                while dt <= (forecast_date + one_day - timedelta(days=num_years_for_avg*365)):
                     data = df[df['date']==dt.strftime(row_time_fmt)]
                     for key in avg_days.keys():
                         avg_days[key] += data[key].values[0]
@@ -350,14 +350,14 @@ def generate_image_for_location(location, num_days, email_string):
                 num_years_for_avg -= 1
             combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/divisor
             deviation_avg = forecast - combined_avg
-            deviation_avg_pct = float(-1 * deviation_avg)/combined_avg * 100.
+            deviation_avg_pct = float(deviation_avg)/combined_avg * 100.
             deviation_avg_sign = '+'
 
             if combined_avg > forecast:
                 deviation_avg_sign = ''
-                deviation_avg_color = green_scale(abs(deviation_avg_pct/100.)).hexcode
-            elif combined_avg < forecast:
                 deviation_avg_color = red_scale(abs(deviation_avg_pct/100.)).hexcode
+            elif combined_avg < forecast:
+                deviation_avg_color = green_scale(abs(deviation_avg_pct/100.)).hexcode
             else:
                 deviation_avg_sign = ''
                 deviation_avg_color = 'black'
