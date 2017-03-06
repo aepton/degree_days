@@ -338,7 +338,7 @@ def generate_image_for_location(location, num_days, email_string):
             forecast_date = datetime.strptime(forecast_date_text, '%b %d, %Y')
 
             avg_days = {'Cooling': 0, 'Heating': 0}
-            num_years_for_avg = 10
+            num_years_for_avg = 5
             divisor = float(num_years_for_avg)
             while num_years_for_avg:
                 dt = forecast_date + one_day - one_week - timedelta(days=num_years_for_avg*365)
@@ -346,21 +346,23 @@ def generate_image_for_location(location, num_days, email_string):
                     data = df[df['date']==dt.strftime(row_time_fmt)]
                     for key in avg_days.keys():
                         avg_days[key] += data[key].values[0]
-                    print dt.strftime(row_time_fmt)
                     dt += one_day
                 num_years_for_avg -= 1
             combined_avg = float(avg_days['Cooling'] + avg_days['Heating'])/10.
             deviation_avg = forecast - combined_avg
             deviation_avg_pct = (float(forecast) - combined_avg)/combined_avg * 100.
+            deviation_avg_sign = '+'
 
-            if deviation_avg > forecast:
+            if combined_avg > forecast:
+                deviation_avg_sign = ''
                 deviation_avg_color = green_scale(abs(deviation_avg_pct/100.)).hexcode
             elif deviation_avg < forecast:
                 deviation_avg_color = red_scale(abs(deviation_avg_pct/100.)).hexcode
             else:
+                deviation_avg_sign = ''
                 deviation_avg_color = 'black'
 
-            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)\nDeviation from last 10 years (avg): %s (%.2f%%)' % (
+            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)\nDeviation from last 10 years (avg): %s (%s%.2f%%)' % (
                 locale.format('%d', forecast, grouping=True),
                 locale.format('%d', deviation_normal, grouping=True),
                 deviation_normal_sign,
@@ -369,9 +371,10 @@ def generate_image_for_location(location, num_days, email_string):
                 deviation_ly_sign,
                 deviation_ly_pct,
                 locale.format('%d', deviation_avg, grouping=True),
+                deviation_avg_sign,
                 deviation_avg_pct
             )
-            email_text['html'] += '<p>Forecast: <strong>%s (%s)</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last 10 years (avg): <strong style="color:%s">%s (%.2f%%)</strong> degree days</p>' % (
+            email_text['html'] += '<p>Forecast: <strong>%s (%s)</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last 10 years (avg): <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
                 locale.format('%d', forecast, grouping=True),
                 locale.format('%f', combined_avg, grouping=True),
                 deviation_normal_color,
@@ -384,6 +387,7 @@ def generate_image_for_location(location, num_days, email_string):
                 deviation_ly_pct,
                 deviation_avg_color,
                 locale.format('%d', deviation_avg, grouping=True),
+                deviation_avg_sign,
                 deviation_avg_pct
             )
         except Exception, e:
