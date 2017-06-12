@@ -280,84 +280,85 @@ def generate_image_for_location(location, num_days, email_string):
             grouping=True)
     )
 
-    # Now let's get the forecast from NOAA for the next week
-    r = requests.get('http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt')
-    forecast_date_sign = 'LAST DATE OF FORECAST WEEK IS '
-    forecast_date_text = ''
-    for line in r.text.splitlines():
-        if line.strip().startswith('ILLINOIS'):
-            results = line.split()
-        elif line.strip().startswith(forecast_date_sign):
-            forecast_date_text = line.replace(forecast_date_sign, '').strip()
-            email_text['text'] += 'Degree Day forecast (statewide), week ending %s\nCourtesy NOAA Climate Prediction Center: http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt' % forecast_date_text
-            email_text['html'] += '<h4>Degree Day forecast (statewide), week ending %s</h4><p>Courtesy <a href="http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/hfstwpws.txt">NOAA Climate Prediction Center</a></p>' % forecast_date_text
+    # Now let's get the forecast from NOAA for the next week, heating and cooling
+    for ddtype in [('Cooling', 'c'), ('Heating', 'h')]:
+        r = requests.get('http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/%sfstwpws.txt' % ddtype[1])
+        forecast_date_sign = 'LAST DATE OF FORECAST WEEK IS '
+        forecast_date_text = ''
+        for line in r.text.splitlines():
+            if line.strip().startswith('ILLINOIS'):
+                results = line.split()
+            elif line.strip().startswith(forecast_date_sign):
+                forecast_date_text = line.replace(forecast_date_sign, '').strip()
+                email_text['text'] += '%s Degree Day forecast (statewide), week ending %s\nCourtesy NOAA Climate Prediction Center: http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/%sfstwpws.txt' % (ddtype[0], forecast_date_text, ddtype[1])
+                email_text['html'] += '<h4>%s Degree Day forecast (statewide), week ending %s</h4><p>Courtesy <a href="http://www.cpc.ncep.noaa.gov/products/analysis_monitoring/cdus/degree_days/%sfstwpws.txt">NOAA Climate Prediction Center</a></p>' % (ddtype[0], forecast_date_text, ddtype[1])
 
-    if results and len(results) > 4:
-        try:
-            forecast = int(results[1].replace(',', ''))
-            deviation_normal = int(results[2].replace(',', ''))
-            deviation_last_year = int(results[3].replace(',', ''))
-            deviation_normal_sign = '+'
-            deviation_normal_pct = 0.
-            deviation_normal_value = float(forecast + -1 * deviation_normal)
-            if deviation_normal_value != 0.:
-                deviation_normal_pct = (
-                    100. * (float(forecast) - deviation_normal_value)/deviation_normal_value)
+        if results and len(results) > 4:
             try:
-                deviation_normal_color = green_scale(abs(deviation_normal_pct/100.)).hexcode
-            except:
-                deviation_normal_color = dark_green
-            deviation_ly_sign = '+'
-            deviation_ly_pct = 0.
-            deviation_ly_value = float(forecast + -1 * deviation_last_year)
-            if deviation_ly_value != 0.:
-                deviation_ly_pct = (
-                    100. * (float(forecast) - deviation_ly_value)/deviation_ly_value)
-            try:
-                deviation_ly_color = green_scale(abs(deviation_ly_pct/100.)).hexcode
-            except:
-                deviation_ly_color = dark_green
-            if deviation_normal < 0:
-                deviation_normal_sign = ''
+                forecast = int(results[1].replace(',', ''))
+                deviation_normal = int(results[2].replace(',', ''))
+                deviation_last_year = int(results[3].replace(',', ''))
+                deviation_normal_sign = '+'
+                deviation_normal_pct = 0.
+                deviation_normal_value = float(forecast + -1 * deviation_normal)
+                if deviation_normal_value != 0.:
+                    deviation_normal_pct = (
+                        100. * (float(forecast) - deviation_normal_value)/deviation_normal_value)
                 try:
-                    deviation_normal_color = red_scale(abs(deviation_normal_pct/100.)).hexcode
+                    deviation_normal_color = green_scale(abs(deviation_normal_pct/100.)).hexcode
                 except:
-                    deviation_normal_color = dark_red
-            elif deviation_normal == 0:
-                deviation_normal_sign = ''
-                deviation_normal_color = 'black'
-            if deviation_last_year < 0:
-                deviation_ly_sign = ''
+                    deviation_normal_color = dark_green
+                deviation_ly_sign = '+'
+                deviation_ly_pct = 0.
+                deviation_ly_value = float(forecast + -1 * deviation_last_year)
+                if deviation_ly_value != 0.:
+                    deviation_ly_pct = (
+                        100. * (float(forecast) - deviation_ly_value)/deviation_ly_value)
                 try:
-                    deviation_ly_color = red_scale(abs(deviation_ly_pct/100.)).hexcode
+                    deviation_ly_color = green_scale(abs(deviation_ly_pct/100.)).hexcode
                 except:
-                    deviation_ly_color = dark_red
-            elif deviation_last_year == 0:
-                deviation_ly_sign = ''
-                deviation_ly_color = 'black'
+                    deviation_ly_color = dark_green
+                if deviation_normal < 0:
+                    deviation_normal_sign = ''
+                    try:
+                        deviation_normal_color = red_scale(abs(deviation_normal_pct/100.)).hexcode
+                    except:
+                        deviation_normal_color = dark_red
+                elif deviation_normal == 0:
+                    deviation_normal_sign = ''
+                    deviation_normal_color = 'black'
+                if deviation_last_year < 0:
+                    deviation_ly_sign = ''
+                    try:
+                        deviation_ly_color = red_scale(abs(deviation_ly_pct/100.)).hexcode
+                    except:
+                        deviation_ly_color = dark_red
+                elif deviation_last_year == 0:
+                    deviation_ly_sign = ''
+                    deviation_ly_color = 'black'
 
-            email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)' % (
-                locale.format('%d', forecast, grouping=True),
-                locale.format('%d', deviation_normal, grouping=True),
-                deviation_normal_sign,
-                deviation_normal_pct,
-                locale.format('%d', deviation_last_year, grouping=True),
-                deviation_ly_sign,
-                deviation_ly_pct
-            )
-            email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
-                locale.format('%d', forecast, grouping=True),
-                deviation_normal_color,
-                locale.format('%d', deviation_normal, grouping=True),
-                deviation_normal_sign,
-                deviation_normal_pct,
-                deviation_ly_color,
-                locale.format('%d', deviation_last_year, grouping=True),
-                deviation_ly_sign,
-                deviation_ly_pct
-            )
-        except Exception, e:
-            print e
+                email_text['text'] += 'Forecast: %s\nDeviation from normal: %s (%s%.2f%%)\nDeviation from last year: %s (%s%.2f%%)' % (
+                    locale.format('%d', forecast, grouping=True),
+                    locale.format('%d', deviation_normal, grouping=True),
+                    deviation_normal_sign,
+                    deviation_normal_pct,
+                    locale.format('%d', deviation_last_year, grouping=True),
+                    deviation_ly_sign,
+                    deviation_ly_pct
+                )
+                email_text['html'] += '<p>Forecast: <strong>%s</strong> degree days<br>Deviation from normal: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days<br>Deviation from last year: <strong style="color:%s">%s (%s%.2f%%)</strong> degree days</p>' % (
+                    locale.format('%d', forecast, grouping=True),
+                    deviation_normal_color,
+                    locale.format('%d', deviation_normal, grouping=True),
+                    deviation_normal_sign,
+                    deviation_normal_pct,
+                    deviation_ly_color,
+                    locale.format('%d', deviation_last_year, grouping=True),
+                    deviation_ly_sign,
+                    deviation_ly_pct
+                )
+            except Exception, e:
+                print e
 
     # Generate day-by-day last-x-years average values for charts
     filtered_df = df.loc[(df['date'] >= filtered_begin_date) & (df['date'] <= end_date), :]
